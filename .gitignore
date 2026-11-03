@@ -1,0 +1,6 @@
+*.iso
+*.qcow2
+debloat_temp/
+__pycache__/
+*.pyc
+.tmp/
