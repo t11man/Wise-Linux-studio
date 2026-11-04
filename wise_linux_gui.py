@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # Wise Linux Studio - Hardened GUI with Stdout Candidate Verification & Safe Guards
-
 import os
 import re
 import stat
@@ -306,7 +305,8 @@ class WiseLinuxGUI:
         ram_arg, disk_arg = res_args
         script = os.path.join(self.script_dir, "vm_builder.sh")
         self.log("\n[*] Starting SAFE DRY-RUN Test (Zero RAM / No VM Launch)...")
-        self.run_script_async(["pkexec", script, iso_path, "--dry-run", ram_arg, disk_arg])
+        bdf_arg = self.candidate_bdf if self.candidate_bdf else ""
+        self.run_script_async(["pkexec", script, iso_path, "--dry-run", ram_arg, disk_arg, bdf_arg])
 
     def build_vm(self):
         iso_path = self.iso_path_var.get().strip()
@@ -339,7 +339,8 @@ class WiseLinuxGUI:
                 "virt-viewer", "--connect", "qemu:///system", "--reconnect", "WiseGhost_Win11"
             ])
 
-        self.run_script_async(["pkexec", script, iso_path, "--build", ram_arg, disk_arg], on_success=launch_viewer)
+        bdf_arg = self.candidate_bdf if self.candidate_bdf else ""
+        self.run_script_async(["pkexec", script, iso_path, "--build", ram_arg, disk_arg, bdf_arg], on_success=launch_viewer)
 
     def launch_existing_vm(self):
         self.log("\n[*] Launching existing WiseGhost_Win11 Gaming VM...")
