@@ -91,7 +91,7 @@ Attach a real GPU to the Windows VM| Not available yet
 
 VM-Only Workflow
 
-For most users, the recommended workflow is:
+For integrated graphics users, the recommended workflow is:
 
 1. Press 5. Build Ghost VM to create the Windows VM.
 2. Press 6. Launch Gaming VM whenever you want to use Windows.
@@ -127,7 +127,7 @@ For buttons 5–6:
 
 - Fedora Linux.
 - Hardware virtualization enabled in BIOS.
-- At least 12 GB of RAM.
+- At least 12 GB of RAM to protect the system from freezing
 - Approximately 80 GB of free disk space.
 - A Windows 11 ISO.
 
@@ -143,7 +143,7 @@ For buttons 1–3, the recommended configuration is:
 - UEFI firmware.
 - VT-d or AMD-Vi enabled in BIOS.
 
-Connect your monitor to the motherboard's display output so Fedora continues using the integrated GPU while the dedicated GPU is prepared for Windows.
+
 
 Unsupported or Untested Configurations
 
