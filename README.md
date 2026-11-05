@@ -1,368 +1,212 @@
-# Wise-Linux-studio
-# Wise Linux Studio (Alpha/Beta Release)
-> **Automated GPU VFIO Passthrough & Zero-Touch Ghost Windows 11 VM Manager**
 Wise Linux Studio
 
-A simple GUI for building and running Windows 11 virtual machines on Fedora Linux, with experimental GPU passthrough preparation.
+Run Windows 11 on Fedora from one simple window, with experimental GPU passthrough preparation.
 
-Wise Linux Studio brings the tools needed to create and manage a Windows 11 virtual machine into one simple graphical interface.
+"status" (https://img.shields.io/badge/status-early%20beta-orange) "platform" (https://img.shields.io/badge/platform-Fedora-51A2DA) "license" (https://img.shields.io/badge/license-MIT-blue)
 
-It uses libvirt, QEMU, and KVM to build Windows VMs with a fully unattended installation. On desktop systems with two GPUs, it can also prepare a secondary GPU for VFIO passthrough.
+Wise Linux Studio is a small GUI (Python/Tkinter + shell scripts) that builds and runs a Windows 11 virtual machine on Fedora using libvirt, QEMU and KVM, with a fully unattended install. On desktops with two GPUs it can also prepare a dedicated GPU for VFIO passthrough.
 
-Linux already provides powerful tools for virtualization and GPU passthrough, but configuring them can be complicated. This project aims to make the process easier by bringing the essential steps together in one window.
+Linux already has powerful tools for virtualization and GPU passthrough, but they are scattered and complicated to configure. This project puts the essential steps in one window, with safety checks and a restore button.
 
-«🧪 Early beta — v0.1
-
-GPU isolation is experimental. Attaching a passed-through GPU to the VM is not implemented yet.
-
-See "Safety & Status" (#-safety--status) before using GPU isolation.»
-
----
+«🧪 Early beta (v0.1). The VM-only workflow (buttons 5 and 6) is the main usable feature. GPU isolation (buttons 1 to 3) edits your boot configuration as root, is experimental, and has not been tested on real dual-GPU hardware yet. Please read the Safety & status section before using it.»
 
 ✨ Features
 
-🖥️ Windows 11 Virtual Machine
+🖥 Windows 11 virtual machine
 
-- Zero-touch installation: Select a Windows 11 ISO and start the installation with one button.
-- Automatic UEFI and TPM: The VM is configured with the requirements needed for Windows 11.
-- Automatic resource allocation: Uses 50% of available RAM and a 60 GB thin-provisioned disk by default.
-- Manual configuration: Choose your own RAM and disk settings.
-- One-click launch: Build the VM once, then launch it whenever you need Windows.
-- Persistent installation: Your Windows files, applications, and VM configuration stay available between sessions.
+- Zero-touch install: pick a Windows 11 ISO and press one button.
+- UEFI, Secure Boot and a software TPM 2.0 are configured for you.
+- Automatic resources: 50% of your RAM and a 60 GB thin-provisioned disk, or set your own values.
+- Build once, launch any time. Your Windows files and apps persist between sessions.
+- Host protection: the builder refuses to run with less than 12 GB of host RAM, always leaves at least 4.5 GB to Fedora, and needs at least 25 GB of free disk space.
 
-🎮 GPU Passthrough (VFIO) — In Progress
+🎮 GPU passthrough (VFIO), experimental
 
-On supported dual-GPU desktops, Wise Linux Studio can prepare a dedicated GPU for VFIO.
+VFIO lets a virtual machine use real hardware directly, which is how near-native GPU performance is reached.
 
-VFIO allows a virtual machine to access real hardware directly, potentially providing near-native GPU performance.
+- Buttons 1 to 3 prepare a secondary GPU on a dual-GPU desktop (it is bound to "vfio-pci" at boot).
+- When you build the VM after isolating a GPU, the builder attaches it (together with its audio function) only if all checks pass: it is not the boot GPU, IOMMU is active for it, and its current driver is "vfio-pci". Otherwise the VM uses emulated QXL graphics.
+- None of this has been tested on real dual-GPU hardware yet.
+- Windows shows its output on the monitor connected to the passed-through GPU. The viewer window only shows the emulated display.
 
-Current status:
+🔍 GPU & IOMMU scanner
 
-- GPU detection and IOMMU scanning are implemented.
-- GPU isolation preparation is available through buttons 1–3.
-- GPU isolation modifies boot configuration and is experimental.
-- Attaching the isolated GPU to the Windows VM is not implemented yet.
-- The VM currently uses emulated QXL graphics.
+- Read-only: it changes nothing and needs no root.
+- Lists every GPU with its "boot_vga" flag, IOMMU group and whether it can be isolated.
+- Warns when a GPU shares its IOMMU group with other devices.
 
-Important: The current VM is suitable for office work and applications, but its emulated graphics are not suitable for demanding gaming.
+🛡 Safety features
 
-🔍 GPU & IOMMU Scanner
+- Safety lock: GPU isolation stays locked unless exactly one suitable secondary GPU is found. The GPU driving your display is never a candidate.
+- Verify before changing: the GRUB and initramfs scripts re-scan the hardware by themselves and abort if it changed since your scan.
+- Backups: the original GRUB configuration is saved in "/var/lib/wise-linux/" before the first change and is never overwritten.
+- Restore System: one button removes what the tool added.
+- Least privilege: scanning needs no root; every system-changing step asks for your authentication through "pkexec".
+- Script checks: the GUI refuses to run scripts that are symlinks or group/world-writable.
+- Sleep protection: the viewer runs under "systemd-inhibit" so the machine does not suspend while the VM runs.
 
-- Read-only GPU detection.
-- Displays detected GPUs and their IOMMU groups.
-- Shows whether a GPU can potentially be isolated.
-- Scanning does not modify system configuration.
-- Does not require root privileges.
+🎯 Anti-cheat compatibility (untested)
 
-🛡️ Safety Features
+The VM builder hides the hypervisor flag and passes your host's motherboard and BIOS identifiers to Windows, so the VM looks less like a VM. This is intended to help with some games that detect virtual machines.
 
-- Built-in safety lock: GPU isolation remains locked unless a suitable secondary GPU is detected.
-- Host GPU protection: The GPU currently driving the Linux display is never selected for isolation.
-- Verify before changing: The GRUB setup script rescans hardware and aborts if the configuration has changed since the initial scan.
-- Automatic backups: The original GRUB configuration is saved before modification.
-- Restore System: A dedicated option restores the original boot configuration.
-- Least privilege: System-changing operations request authentication through "pkexec".
-- Sleep protection: The VM viewer uses "systemd-inhibit" to prevent automatic suspension while the VM is running.
+- Compatibility has not been tested.
+- Kernel-level anti-cheats such as Riot Vanguard (Valorant) are expected to block virtual machines.
+- Results can change with any game or anti-cheat update.
+- These techniques may violate a game's terms of service. Use them at your own risk, and check your specific game first.
 
-🎯 Anti-Cheat Compatibility — Untested
-
-The VM builder hides the hypervisor flag and passes the host motherboard and BIOS identifiers to Windows.
-
-These techniques are intended to improve compatibility with some games that detect virtual machines.
-
-However:
-
-- Anti-cheat compatibility has not been tested.
-- Kernel-level anti-cheats such as Riot Vanguard are expected to block virtual machines.
-- Compatibility can change after game or anti-cheat updates.
-- These techniques may violate individual games' terms of service.
-
-Do not rely on anti-cheat compatibility without checking the specific game.
-
----
-
-🎯 Which Buttons Do I Need?
+🎯 Which buttons do I need?
 
 Goal| Buttons
-Build a Windows desktop inside Fedora| 5. Build Ghost VM
-Launch the Windows VM| 6. Launch Gaming VM
-Prepare a secondary GPU for passthrough| 1 → 2 → 3
-Attach a real GPU to the Windows VM| Not available yet
+A Windows desktop inside Fedora (most users)| 5. Build Ghost VM once, then 6. Launch Gaming VM
+Check your hardware (changes nothing)| 1. Scan GPU
+Turn on IOMMU in the kernel (when the scan asks for it)| 2a. Enable IOMMU, reboot, scan again
+Isolate a secondary GPU for passthrough| 1, 2, 3, reboot, scan again, then 5 (experimental)
+Undo what the tool changed| 4. Restore System, then reboot
+Check resources without building anything| Test Mode (Dry-Run)
 
-VM-Only Workflow
+VM-only workflow (recommended)
 
-For integrated graphics users, the recommended workflow is:
+1. Press 5. Build Ghost VM and wait for Windows to install itself.
+2. Press 6. Launch Gaming VM whenever you want Windows.
 
-1. Press 5. Build Ghost VM to create the Windows VM.
-2. Press 6. Launch Gaming VM whenever you want to use Windows.
+GPU passthrough workflow (experimental)
 
-Buttons 5–6 do not modify GRUB and are significantly lower risk than GPU isolation.
+1. In the BIOS: enable VT-d / AMD-Vi, use UEFI, and connect your monitor to the motherboard (iGPU) port.
+2. Press 1. Scan GPU. If it reports that IOMMU is off in the kernel, press 2a. Enable IOMMU, reboot, and scan again.
+3. Read the scan table yourself. Your dedicated GPU must be marked as a candidate and the GPU driving your screen must not.
+4. Press 2. Setup GRUB, then 3. Build Initramfs, then reboot.
+5. Press 1. Scan GPU again. The build step only receives the GPU address from a scan made in the same session.
+6. Press 5. Build Ghost VM. Connect a cable or switch your monitor input to the dedicated GPU, and install its driver inside Windows.
 
-GPU Passthrough Workflow
+🖥 Supported platform & recommended hardware
 
-Buttons 1–3 prepare the secondary GPU for VFIO.
+Operating system: Fedora only (tested on Fedora KDE). The scripts use Fedora tools and paths: "grubby", "grub2-mkconfig", BLS boot entries, "dracut", "dnf" and "systemd". Other distributions are not supported.
 
-However, the actual GPU attachment and gaming workflow are still under development.
+For buttons 5 and 6: hardware virtualization enabled in the BIOS (VT-x / AMD-V), at least 12 GB of RAM, at least 25 GB of free disk space (about 80 GB recommended), UEFI, and a Windows 11 ISO.
 
----
-
-🖥️ Supported Platform & Recommended Hardware
-
-Operating System
-
-- Fedora Linux only.
-- Tested on Fedora KDE.
-- Other distributions are currently unsupported.
-
-The scripts rely on Fedora-specific tools and paths, including:
-
-- "grubby"
-- "grub2-mkconfig"
-- BLS boot entries
-- "dnf"
-
-Virtual Machine Requirements
-
-For buttons 5–6:
-
-- Fedora Linux.
-- Hardware virtualization enabled in BIOS.
-- At least 12 GB of RAM to protect the system from freezing
-- Approximately 80 GB of free disk space.
-- A Windows 11 ISO.
-
-The VM builder refuses to run with less than 12 GB of RAM.
-
-Recommended GPU Passthrough Setup
-
-For buttons 1–3, the recommended configuration is:
-
-- A desktop PC with two GPUs.
-- An integrated GPU (iGPU) for Fedora.
-- A dedicated NVIDIA or AMD GPU for Windows.
-- UEFI firmware.
-- VT-d or AMD-Vi enabled in BIOS.
-
-
-
-Unsupported or Untested Configurations
+For GPU isolation (buttons 1 to 3): a desktop with two GPUs, the CPU's integrated GPU (iGPU) plus a dedicated NVIDIA or AMD GPU, UEFI, VT-d / AMD-Vi enabled, and the monitor connected to the iGPU port.
 
 Configuration| Status
 Fedora laptop with a single Intel iGPU| VM-only workflow tested
-Desktop with two GPUs| Not tested yet
-Real GPU isolation| Not tested on dual-GPU hardware
+Desktop with iGPU + dedicated GPU| Not tested yet
+Real GPU isolation and attaching| Not tested on dual-GPU hardware
 AMD GPUs| Untested
 Two dedicated GPUs| Untested
+Single dedicated GPU without an iGPU| Not supported ("single_gpu_hooks.sh" is unfinished and unused)
 Other Linux distributions| Unsupported
-Single dedicated GPU without an iGPU| Unfinished
 
-The single-GPU implementation ("single_gpu_hooks.sh") is unfinished and is not connected to the VM builder.
+🚀 Install & run
 
----
-
-## 🛠️ Installation & Setup
-
-Follow these exact steps to clone the repository, set permissions, install dependencies, and run the GUI.
-
-### 1. Clone the Repository
-Open your terminal in Fedora and run:
-
-```bash
-git clone https://github.com/t11man/Wise-Linux-Studio.git
-cd Wise-Linux-Studio
-
-```
-
-### 2. Prepare the Scripts
-The GUI enforces strict security checks and refuses to run scripts that are group- or world-writable. Fix permissions by running:
-
-```bash
-chmod 755 *.sh
-```
-
-### 3. Install Dependencies
-Install all required packages for virtualization and the interface on Fedora:
-
-```bash
-sudo dnf install -y @virtualization python3-tkinter virt-viewer swtppm edk2-ovmf xorriso ShellCheck
-```
-
-4. Download the Required ISOs
-
-Windows 11 ISO
-
-Download it from Microsoft:
-
-https://www.microsoft.com/software-download/windows11
-
-VirtIO Windows Drivers
-
-Download the VirtIO driver ISO:
-
-https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso
-
-Place "virtio-win.iso" in the project folder.
-
-5. Launch Wise Linux Studio
-
+git clone https://github.com/t11man/Wise-Linux-studio.git
+cd Wise-Linux-studio
+chmod 755 *.sh      # the GUI refuses scripts that are group/world-writable
 python3 wise_linux_gui.py
 
-Requirements Summary
+Install the dependencies first:
 
-Requirement| VM Only| GPU Isolation
-Fedora Linux| Required| Required
-Virtualization enabled| Required| Required
-12 GB+ RAM| Required| Required
-Windows 11 ISO| Required| Required
-VirtIO ISO| Required| Required
-UEFI| Required| Required
-IOMMU enabled| Not required| Required
-Secondary GPU| Not required| Required
-Monitor connected to host GPU| Not required| Recommended
+sudo dnf install -y @virtualization python3-tkinter virt-viewer swtpm edk2-ovmf xorriso
 
----
+Optional, for development: "sudo dnf install ShellCheck".
 
-🛡️ Safety & Status
+Downloads
 
-Please understand the risks before using buttons 1–4.
+- Windows 11 ISO from Microsoft: https://www.microsoft.com/software-download/windows11
+- VirtIO drivers (put "virtio-win.iso" in the project folder): https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso
 
-These operations modify boot configuration as root. An incorrect configuration can prevent your system from booting normally.
+🪟 What the unattended Windows install does
 
-Before using GPU isolation:
+- Needs an English (en-US) Windows 11 ISO that includes the Pro edition. Other languages or editions are not supported yet.
+- Wipes the VM's virtual disk only. Your real disks are never touched.
+- Creates a local administrator account named after your Linux username, with an empty password and automatic login.
+- Windows is not activated. You need your own license.
+- Turns off Windows telemetry and the SysMain service.
+- Currently installs Steam and starts it in Big Picture mode at logon.
 
-- Keep a Linux live USB ready.
-- Back up important files.
-- Make sure you can recover your system.
+🛡 Safety & status
+
+Understand the risks before using buttons 1 to 4. They change your boot configuration as root. A mistake can stop your PC from booting normally.
+
+- Keep a Linux live USB ready and back up important files.
 - Do not experiment on your only machine.
-- Read the GPU scan results carefully.
-
-Current Testing Status
+- Read the scan table carefully before pressing 2. Setup GRUB.
 
 Area| Status
-Fedora laptop with a single Intel iGPU| GUI, read-only scan, safety lock, and unattended Windows 11 installation tested
-Desktop with two GPUs| Not tested
-GPU isolation and GRUB setup| Not tested on dual-GPU hardware
-Initramfs VFIO configuration| Not tested on dual-GPU hardware
-AMD GPUs| Untested
-Other distributions| Unsupported
+GUI, read-only scan, safety lock, unattended Windows 11 install| Tested on a Fedora laptop with a single Intel iGPU
+GRUB / initramfs steps and GPU isolation| Not tested on dual-GPU hardware
+Attaching the isolated GPU to the VM| Not tested
+Anti-cheat compatibility| Not tested
+AMD GPUs and other distributions| Untested / unsupported
 
-The project was developed with help of gemini argon and reviewed manually then reviewed multiple times with claude to ensure the codes stability
+Treat GPU isolation as experimental until it has been tested and reviewed on real dual-GPU hardware. See How this project was built below for how the code was written and reviewed.
 
-GPU isolation should be considered experimental until it has been tested ansolation should be considered experimental until it has been tested and reviewed on real dual-GPU hardware.d reviewed on real dual-GPU hardware.
+🆘 Recovery: the PC won't boot properly after GPU isolation
 
----
+1. Boot once without the VFIO arguments. At the GRUB menu:
 
-🆘 Recovery: PC Won't Boot Properly After GPU Isolation
+1. Select your Fedora entry and press "e".
+2. On the line starting with "linux", delete "vfio-pci.ids=...", "intel_iommu=on", "iommu=pt" and "rd.driver.pre=vfio-pci".
+3. Press Ctrl + X to boot once.
 
-If the system fails to boot normally after GPU isolation, you may be able to boot once without the VFIO boot arguments.
+If that still fails, pick an older kernel in the GRUB menu: only the initramfs of the current kernel is rebuilt by the tool.
 
-1. Boot Without the VFIO Arguments
-
-At the GRUB menu:
-
-1. Select your Linux boot entry.
-2. Press "e" to edit it.
-3. Find the line beginning with "linux".
-4. Remove the VFIO-related arguments:
-
-vfio-pci.ids=...
-intel_iommu=on
-iommu=pt
-rd.driver.pre=vfio-pci
-
-5. Press "Ctrl + X" to boot once with the modified entry.
-
-2. Restore the Original Configuration
-
-After successfully booting Fedora:
-
-Use Restore System in Wise Linux Studio.
-
-Alternatively, restore the original configuration manually:
+2. Undo the changes. Once Fedora starts, press 4. Restore System in the tool and reboot. To do it manually:
 
 sudo cp /var/lib/wise-linux/grub.default.orig /etc/default/grub
-
-Then regenerate the GRUB configuration:
-
+sudo grubby --info=DEFAULT | grep -o 'vfio-pci.ids=[^ "]*'      # note the value
+sudo grubby --update-kernel=ALL --remove-args="intel_iommu=on iommu=pt rd.driver.pre=vfio-pci"
+sudo grubby --update-kernel=ALL --remove-args="vfio-pci.ids=XXXX:XXXX,XXXX:XXXX"   # use the value printed above
+sudo rm -f /etc/modprobe.d/wise_linux_vfio.conf /etc/dracut.conf.d/wise_linux_vfio.conf
+sudo dracut -f
 sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+sudo reboot
 
-Note: Fedora uses Boot Loader Specification (BLS) entries. Whether "grub2-mkconfig" alone correctly updates every relevant boot entry is still being verified. Fedora's boot configuration may require additional recovery steps.
+3. If Fedora cannot reach a desktop: boot a Linux live USB, mount your Fedora root partition, and restore "/etc/default/grub" from "/var/lib/wise-linux/grub.default.orig". Remove the two config files above and rebuild the boot configuration for your installation.
 
-3. If Fedora Cannot Reach the Desktop
+⚠️ Known issues
 
-Boot from a Linux live USB.
+- Suspending the host while the VM runs froze the desktop during early testing. "systemd-inhibit" now prevents automatic suspend, but closing a laptop lid needs more testing.
+- Save & Pause VM is blocked when a GPU is passed through, because saving the state of a passed-through GPU is generally unsupported.
+- Boot arguments are applied with "grubby" (Fedora BLS entries) and "grub2-mkconfig". This has not been verified on real dual-GPU hardware.
+- Some AMD GPUs have a reset bug and may need a host reboot to come back.
+- GPU detection relies on "boot_vga". If your BIOS makes the dedicated GPU primary, the scanner may choose the other GPU. Always read the scan table.
+- The builder only attaches a GPU that is already bound to "vfio-pci". Isolate and reboot before building the VM.
+- Rebuilding the VM deletes the existing one (the GUI asks first).
+- Only English (en-US) Windows 11 ISOs with the Pro edition are supported.
+- Fedora only. Other distributions and init systems are not supported.
 
-Mount your Fedora root partition and restore the original GRUB configuration from:
-
-/var/lib/wise-linux/grub.default.orig
-
-Then regenerate the boot configuration as appropriate for your Fedora installation.
-
----
-
-⚠️ Known Issues
-
-- Suspending the system while the VM is running caused the desktop to freeze during testing.
-- "systemd-inhibit" is used to prevent automatic suspension, but lid-close behavior still needs more testing.
-- Save & Pause VM ("managedsave") is blocked when a GPU is passed through, because this is generally unsupported.
-- Fedora uses BLS boot entries. Whether "grub2-mkconfig" alone updates them correctly is still being verified.
-- "grubby" may replace or modify boot configuration differently from "grub2-mkconfig".
-- Some AMD GPUs have reset issues and may require a host reboot.
-- GPU detection uses the "boot_vga" attribute to identify the boot GPU.
-- If the BIOS makes the dedicated GPU primary, the scanner may select the other GPU as the candidate.
-- Always review the scan table before pressing Setup GRUB.
-- Single-GPU mode ("single_gpu_hooks.sh") is unfinished and is not connected to the VM builder.
-
----
-
-📁 Project Layout
+📁 Project layout
 
 File| Purpose
-"wise_linux_gui.py"| Main graphical interface
+"wise_linux_gui.py"| The graphical interface
 "gpu_detect.sh"| Read-only GPU and IOMMU scanner
-"grub_setup.sh"| Adds VFIO boot arguments, verifies hardware, and creates backups
-"initramfs_setup.sh"| Rebuilds initramfs for VFIO
-"restore_system.sh"| Restores the original system configuration
-"vm_builder.sh"| Builds the Windows 11 VM with unattended installation
+"iommu_enable.sh"| Adds the IOMMU kernel arguments only (button 2a)
+"grub_setup.sh"| Adds VFIO boot arguments, re-verifies hardware, keeps backups
+"initramfs_setup.sh"| Rebuilds the initramfs for VFIO
+"restore_system.sh"| Removes what the tool added
+"vm_builder.sh"| Builds the Windows 11 VM (unattended)
 "create_debloat_iso.sh"| Builds the Windows answer ISO
-"single_gpu_hooks.sh"| Unfinished single-GPU implementation
+"single_gpu_hooks.sh"| Unfinished single-GPU experiment, not used by the GUI
 
----
+🧠 How this project was built
+
+Wise Linux Studio is the idea and design of its author, "@t11man" (https://github.com/t11man). The author designed the workflow and the safety model, directed the development, tested the tool on a real Fedora machine, and found the problems that shaped it, such as a desktop freeze when the host suspended while the VM was running, and a scan step that wrote to disk when it should have been read-only.
+
+The code was written with AI assistance (Gemini) under the author's direction. It was then reviewed repeatedly with Claude (Anthropic), which pointed out bugs and risky behavior that were fixed afterwards.
+
+Reviews like these reduce mistakes, but they are not a guarantee of stability or safety. The code has been tested manually only on a Fedora laptop and has not been audited by a human expert. That is why real hardware testing and expert review are what the project needs most.
 
 🤝 Contributing
 
-Wise Linux Studio is an early beta, and real hardware testing is one of the most valuable contributions right now.
+Wise Linux Studio is an early beta, and real hardware testing is the most valuable contribution right now. Reviews from people who know VFIO, libvirt/QEMU, Fedora boot internals (GRUB, BLS, dracut) and NVIDIA/AMD behavior are very welcome.
 
-Reviews and contributions from people familiar with the following are especially welcome:
+When you open an issue, please include:
 
-- VFIO and GPU passthrough.
-- libvirt and QEMU.
-- Fedora boot internals.
-- GRUB and BLS boot entries.
-- Initramfs configuration.
-- NVIDIA and AMD GPU compatibility.
+- CPU model and GPU models
+- Fedora version
+- Whether the PC has an iGPU or several dedicated GPUs
+- The scan table printed by 1. Scan GPU
+- Relevant logs and error messages
 
-Reporting Hardware & Testing Results
+📜 License
 
-When opening an issue, please include:
-
-- CPU model.
-- GPU models.
-- Fedora version.
-- Whether the system uses an iGPU or multiple dedicated GPUs.
-- The GPU scanner output.
-- Relevant logs and error messages.
-
-Real-world testing on dual-GPU desktops will help identify compatibility problems and improve the project's safety.
-
----
-
-📌 Project Status
-
-Wise Linux Studio is currently an early beta focused on simplifying Windows virtualization on Fedora.
-
-The VM-only workflow is the primary usable feature.
-
-GPU passthrough preparation is experimental, and attaching a real GPU to the VM remains a future milestone.
-
-The goal is to make Windows virtualization on Linux easier without hiding the complexity or risks of the underlying system.
+MIT, see "LICENSE" (LICENSE). Provided as is, with no warranty. You use it at your own risk.
