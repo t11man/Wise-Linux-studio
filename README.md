@@ -98,8 +98,11 @@ Other Linux distributions| Unsupported
 🚀 Install & run
 
 git clone https://github.com/t11man/Wise-Linux-studio.git
+
 cd Wise-Linux-studio
+
 chmod 755 *.sh      # the GUI refuses scripts that are group/world-writable
+
 python3 wise_linux_gui.py
 
 Install the dependencies first:
