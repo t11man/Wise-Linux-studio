@@ -160,22 +160,31 @@ The single-GPU implementation ("single_gpu_hooks.sh") is unfinished and is not c
 
 ---
 
-🚀 Quick Start
+## 🛠️ Installation & Setup
 
-1. Clone the Repository
+Follow these exact steps to clone the repository, set permissions, install dependencies, and run the GUI.
 
-git clone https://github.com/<your-username>/wise-linux.git
-cd wise-linux
+### 1. Clone the Repository
+Open your terminal in Fedora and run:
 
-2. Prepare the Scripts
+```bash
+git clone https://github.com
+cd Wise-Linux-Studio
+```
 
+### 2. Prepare the Scripts
+The GUI enforces strict security checks and refuses to run scripts that are group- or world-writable. Fix permissions by running:
+
+```bash
 chmod 755 *.sh
+```
 
-The GUI refuses to run scripts that are group- or world-writable.
+### 3. Install Dependencies
+Install all required packages for virtualization and the interface on Fedora:
 
-3. Install Dependencies
-
-sudo dnf install @virtualization python3-tkinter virt-viewer swtpm edk2-ovmf xorriso ShellCheck
+```bash
+sudo dnf install -y @virtualization python3-tkinter virt-viewer swtppm edk2-ovmf xorriso ShellCheck
+```
 
 4. Download the Required ISOs
 
