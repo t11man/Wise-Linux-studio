@@ -168,8 +168,9 @@ Follow these exact steps to clone the repository, set permissions, install depen
 Open your terminal in Fedora and run:
 
 ```bash
-git clone https://github.com
+git clone https://github.com/t11man/Wise-Linux-Studio.git
 cd Wise-Linux-Studio
+
 ```
 
 ### 2. Prepare the Scripts
