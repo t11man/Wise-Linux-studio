@@ -246,9 +246,9 @@ Initramfs VFIO configuration| Not tested on dual-GPU hardware
 AMD GPUs| Untested
 Other distributions| Unsupported
 
-The project was developed with AI assistance and has only been partially reviewed.
+The project was developed with help of gemini argon and reviewed manually then reviewed multiple times with claude to ensure the codes stability
 
-GPU isolation should be considered experimental until it has been tested and reviewed on real dual-GPU hardware.
+GPU isolation should be considered experimental until it has been tested ansolation should be considered experimental until it has been tested and reviewed on real dual-GPU hardware.d reviewed on real dual-GPU hardware.
 
 ---
 
