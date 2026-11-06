@@ -45,7 +45,7 @@ VFIO lets a virtual machine use real hardware directly, which is how near-native
 - Script checks: the GUI refuses to run scripts that are symlinks or group/world-writable.
 - Sleep protection: the viewer runs under "systemd-inhibit" so the machine does not suspend while the VM runs.
 
-🎯 Anti-cheat compatibility (untested)
+🎯 Anti-cheat compatibility (untested) ( Everything said here is merely theoretical)
 
 The VM builder hides the hypervisor flag and passes your host's motherboard and BIOS identifiers to Windows, so the VM looks less like a VM. This is intended to help with some games that detect virtual machines.
 
