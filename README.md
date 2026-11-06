@@ -193,7 +193,7 @@ File| Purpose
 
 🧠 How this project was built
 
-Wise Linux Studio is the idea and design of its author, "@t11man" (https://github.com/t11man). The author designed the workflow and the safety model, directed the development, tested the tool on a real Fedora machine, and found the problems that shaped it, such as a desktop freeze when the host suspended while the VM was running, and a scan step that wrote to disk when it should have been read-only.
+Wise Linux Studio is a self tool that I conceived and developed then used gemini pro to build the basics and which I have reviewed  the code multiple times using Claude to ensure its stability., tested the tool on a real Fedora machine, and found the problems that shaped it, such as a desktop freeze when the host suspended while the VM was running, and a scan step that wrote to disk when it should have been read-only.
 
 The code was written with AI assistance (Gemini) under the author's direction. It was then reviewed repeatedly with Claude (Anthropic), which pointed out bugs and risky behavior that were fixed afterwards.
 
