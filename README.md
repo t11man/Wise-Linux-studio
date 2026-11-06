@@ -52,7 +52,8 @@ The VM builder hides the hypervisor flag and passes your host's motherboard and 
 - Compatibility has not been tested.
 - Kernel-level anti-cheats such as Riot Vanguard (Valorant) are expected to block virtual machines.
 - Results can change with any game or anti-cheat update.
-- These techniques may violate a game's terms of service. Use them at your own risk, and check your specific game first.
+- These techniques may violate a game's terms of service. Use them at your own risk, and check your specific game first
+- Using these techniques may result in your account being banned, not just blocked.
 
 🎯 Which buttons do I need?
 
