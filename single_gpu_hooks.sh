@@ -1,15 +1,5 @@
 #!/bin/bash
-# Wise Linux - Single-GPU Passthrough Helper (EXPERIMENTAL, NOT TESTED ON REAL HARDWARE)
-#
-# Commands:
-#   --check                      Report whether single-GPU mode is allowed (no root needed)
-#   --install BDF DM LAUNCHER    Install the libvirt qemu hook (root)
-#   --uninstall                  Remove the hook and its config (root, always exits 0)
-#
-# How it works: when the Wise VM starts in single-GPU mode, the hook stops the display
-# manager, releases the GPU from the host driver and lets libvirt hand it to the VM.
-# When the VM stops, the hook gives the GPU back and restarts the display manager.
-# If anything fails while releasing the GPU, the hook restores the host and aborts the VM start.
+# Wise Linux - Single-GPU Passthrough Helper
 set -euo pipefail
 
 VM_NAME="WiseGhost_Win11"
@@ -107,20 +97,27 @@ run_check() {
         return 1
     fi
 
-    # The IOMMU group may only contain this GPU's own functions and PCI bridges.
-    local slot_prefix="${gpu_bdf%.*}" group_dir="$dev_path/iommu_group/devices" g gb gc
-    for g in "$group_dir"/*; do
-        [[ -e "$g" ]] || continue
-        gb=$(basename "$g")
-        if [[ "$gb" == "${slot_prefix}."* ]]; then
-            continue
+    # Every PCI function in the GPU slot must have an active IOMMU group containing only this slot's functions and PCI bridges.
+    local slot_prefix="${gpu_bdf%.*}" f g gb gc
+    for f in /sys/bus/pci/devices/"${slot_prefix}".*; do
+        [[ -e "$f" ]] || continue
+        if [[ ! -e "$f/iommu_group" ]]; then
+            echo "[!] IOMMU is not active for PCI function $(basename "$f"). Refusing."
+            return 1
         fi
-        gc=$(cat "$g/class" 2>/dev/null || echo "0x000000")
-        if [[ "$gc" == 0x0604* ]]; then
-            continue
-        fi
-        echo "[!] The GPU's IOMMU group also contains another device ($gb). Passing it through is unsafe. Refusing."
-        return 1
+        for g in "$f/iommu_group/devices"/*; do
+            [[ -e "$g" ]] || continue
+            gb=$(basename "$g")
+            if [[ "$gb" == "${slot_prefix}."* ]]; then
+                continue
+            fi
+            gc=$(cat "$g/class" 2>/dev/null || echo "0x000000")
+            if [[ "$gc" == 0x0604* ]]; then
+                continue
+            fi
+            echo "[!] The GPU's IOMMU group also contains another device ($gb). Passing it through is unsafe. Refusing."
+            return 1
+        done
     done
 
     local dm
@@ -150,14 +147,32 @@ do_install() {
         echo "[!] Invalid display manager unit: $dm"
         return 1
     fi
+    if ! [[ "$launcher" =~ ^[A-Za-z0-9_./@+-]+$ ]]; then
+        echo "[!] Invalid launcher path characters."
+        return 1
+    fi
     if [[ ! -x "$launcher" ]]; then
         echo "[!] Launcher script is not executable: $launcher"
         return 1
     fi
 
+    local check_out safe_bdf safe_dm
+    if ! check_out=$(run_check); then
+        echo "$check_out"
+        return 1
+    fi
+
+    safe_bdf=$(echo "$check_out" | sed -n 's/^SINGLE_GPU_OK BDF=\([^ ]*\) DM=.*/\1/p')
+    safe_dm=$(echo "$check_out" | sed -n 's/^SINGLE_GPU_OK BDF=[^ ]* DM=\(.*\)$/\1/p')
+
+    if [[ "$safe_bdf" != "$bdf" ]] || [[ "$safe_dm" != "$dm" ]]; then
+        echo "[!] Security mismatch. Requested BDF/DM does not match safe topology."
+        return 1
+    fi
+
     local funcs=() f
     for f in /sys/bus/pci/devices/"${bdf%.*}".*; do
-        if [[ -e "$f" ]]; then
+        if [[ -e "$f" ]] && [[ -e "$f/iommu_group" ]]; then
             funcs+=("$(basename "$f")")
         fi
     done
@@ -203,6 +218,10 @@ LOG_FILE="/var/log/wise-single-gpu.log"
 [ "$GUEST" = "$VM_NAME" ] || exit 0
 [ -f "$ARMED_FILE" ] || exit 0
 
+if [ -f "$LOG_FILE" ] && [ "$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+    tail -n 1000 "$LOG_FILE" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "$LOG_FILE"
+fi
+
 VIRSH="virsh --connect qemu:///system"
 
 log() {
@@ -230,12 +249,17 @@ prepare_gpu() {
     local drv mods m f dev vt
 
     drv=$(gpu_driver) || drv=""
-    echo "$drv" > "$STATE_FILE"
+    if [ "$drv" = "vfio-pci" ] || [ "$drv" = "vfio_pci" ] || [ "$drv" = "vfio" ]; then
+        log "GPU is already bound to vfio ($drv). Aborting to prevent host driver loss."
+        return 1
+    fi
+
     mods=$(modules_for_driver "$drv")
     if [ -z "$mods" ]; then
         log "unsupported or unknown host GPU driver: '$drv'"
-        return 1
+        return 2
     fi
+    echo "$drv" > "$STATE_FILE"
 
     log "stopping $DM_SERVICE (driver: $drv)"
     systemctl stop "$DM_SERVICE" || { log "could not stop $DM_SERVICE"; return 1; }
@@ -245,19 +269,30 @@ prepare_gpu() {
     done
     sleep 2
 
+    systemctl stop nvidia-persistenced 2>/dev/null || true
+
     for vt in /sys/class/vtconsole/vtcon*; do
         [ -e "$vt/bind" ] || continue
         if grep -q "frame buffer" "$vt/name" 2>/dev/null; then
             echo 0 > "$vt/bind" 2>/dev/null || true
         fi
     done
-    echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/unbind 2>/dev/null || true
+
+    if [ -e "/sys/bus/platform/drivers/efi-framebuffer/efi-framebuffer.0" ]; then
+        echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/unbind 2>/dev/null || true
+    fi
+    if [ -e "/sys/bus/platform/drivers/simple-framebuffer/simple-framebuffer.0" ]; then
+        echo simple-framebuffer.0 > /sys/bus/platform/drivers/simple-framebuffer/unbind 2>/dev/null || true
+    fi
 
     for m in $mods; do
         if lsmod | grep -q "^${m} "; then
             modprobe -r "$m" >> "$LOG_FILE" 2>&1 || { log "could not unload module $m"; return 1; }
         fi
     done
+
+    modprobe vfio-pci >> "$LOG_FILE" 2>&1 || { log "could not load vfio-pci"; return 1; }
+    modprobe vfio_iommu_type1 >> "$LOG_FILE" 2>&1 || { log "could not load vfio_iommu_type1"; return 1; }
 
     for f in $GPU_FUNCS; do
         dev="pci_$(echo "$f" | tr ':.' '__')"
@@ -268,53 +303,125 @@ prepare_gpu() {
 }
 
 restore_gpu() {
-    local drv f dev vt
+    local drv f dev vt cur_drv first
+    local reattach_failed=0
+
     drv=$(cat "$STATE_FILE" 2>/dev/null || echo "")
+    case "$drv" in
+        nvidia|nouveau|amdgpu|i915|xe) ;;
+        *)
+            log "CRITICAL: missing or invalid original host driver in STATE_FILE ('$drv')"
+            return 1
+            ;;
+    esac
     log "restoring GPU to the host (driver: $drv)"
 
     for f in $GPU_FUNCS; do
-        dev="pci_$(echo "$f" | tr ':.' '__')"
-        timeout 30 $VIRSH nodedev-reattach "$dev" >> "$LOG_FILE" 2>&1 || log "could not reattach $dev"
+        cur_drv=""
+        if [ -L "/sys/bus/pci/devices/${f}/driver" ]; then
+            cur_drv=$(basename "$(readlink "/sys/bus/pci/devices/${f}/driver" 2>/dev/null)" 2>/dev/null || echo "")
+        fi
+        if [ "$cur_drv" = "vfio-pci" ] || [ "$cur_drv" = "vfio_pci" ] || [ -z "$cur_drv" ]; then
+            dev="pci_$(echo "$f" | tr ':.' '__')"
+            if ! timeout 30 $VIRSH nodedev-reattach "$dev" >> "$LOG_FILE" 2>&1; then
+                log "CRITICAL: could not reattach $dev"
+                reattach_failed=1
+            fi
+        fi
+        cur_drv=""
+        if [ -L "/sys/bus/pci/devices/${f}/driver" ]; then
+            cur_drv=$(basename "$(readlink "/sys/bus/pci/devices/${f}/driver" 2>/dev/null)" 2>/dev/null || echo "")
+        fi
+        if [ "$cur_drv" = "vfio-pci" ] || [ "$cur_drv" = "vfio_pci" ]; then
+            log "CRITICAL: $f is still bound to $cur_drv after reattach"
+            reattach_failed=1
+        fi
     done
+
+    if [ "$reattach_failed" -eq 1 ]; then
+        log "FATAL: GPU reattach failed. Aborting display manager startup to prevent crash loop."
+        return 1
+    fi
 
     case "$drv" in
         nvidia)
-            modprobe nvidia_drm >> "$LOG_FILE" 2>&1 || true
+            modprobe nvidia >> "$LOG_FILE" 2>&1 || { log "CRITICAL: could not load module nvidia"; return 1; }
+            modprobe nvidia_modeset >> "$LOG_FILE" 2>&1 || { log "CRITICAL: could not load module nvidia_modeset"; return 1; }
+            modprobe nvidia_drm >> "$LOG_FILE" 2>&1 || { log "CRITICAL: could not load module nvidia_drm"; return 1; }
             modprobe nvidia_uvm >> "$LOG_FILE" 2>&1 || true
             ;;
-        "")
-            ;;
         *)
-            modprobe "$drv" >> "$LOG_FILE" 2>&1 || true
+            modprobe "$drv" >> "$LOG_FILE" 2>&1 || { log "CRITICAL: could not load module $drv"; return 1; }
             ;;
     esac
+
+    first="${GPU_FUNCS%% *}"
+    for f in $GPU_FUNCS; do
+        if [ ! -L "/sys/bus/pci/devices/${f}/driver" ]; then
+            echo "$f" > /sys/bus/pci/drivers_probe 2>/dev/null || true
+        fi
+    done
+
+    cur_drv=$(gpu_driver) || cur_drv=""
+    if [ "$cur_drv" != "$drv" ]; then
+        log "CRITICAL: primary GPU $first did not bind to expected host driver '$drv' (current: '$cur_drv')"
+        return 1
+    fi
 
     for vt in /sys/class/vtconsole/vtcon*; do
         [ -e "$vt/bind" ] || continue
         echo 1 > "$vt/bind" 2>/dev/null || true
     done
-    echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/bind 2>/dev/null || true
 
-    systemctl start "$DM_SERVICE" >> "$LOG_FILE" 2>&1 || log "could not start $DM_SERVICE"
+    if [ -e "/sys/bus/platform/devices/efi-framebuffer.0" ] && [ ! -e "/sys/bus/platform/drivers/efi-framebuffer/efi-framebuffer.0" ]; then
+        echo efi-framebuffer.0 > /sys/bus/platform/drivers/efi-framebuffer/bind 2>/dev/null || true
+    fi
+    if [ -e "/sys/bus/platform/devices/simple-framebuffer.0" ] && [ ! -e "/sys/bus/platform/drivers/simple-framebuffer/simple-framebuffer.0" ]; then
+        echo simple-framebuffer.0 > /sys/bus/platform/drivers/simple-framebuffer/bind 2>/dev/null || true
+    fi
+
+    if ! systemctl start "$DM_SERVICE" >> "$LOG_FILE" 2>&1; then
+        log "CRITICAL: could not start $DM_SERVICE"
+        return 1
+    fi
+    sleep 2
+    if ! systemctl is-active --quiet "$DM_SERVICE" 2>/dev/null; then
+        log "CRITICAL: $DM_SERVICE did not remain active after startup"
+        return 1
+    fi
     log "host display restored"
+    return 0
 }
 
 case "${OPERATION}/${SUBOP}" in
     prepare/begin)
         log "=== prepare/begin for $GUEST ==="
-        if ! prepare_gpu; then
+        prep_rc=0
+        prepare_gpu || prep_rc=$?
+        if [ "$prep_rc" -ne 0 ]; then
+            if [ "$prep_rc" -eq 2 ]; then
+                log "prepare aborted before modifying host state; clearing ARMED_FILE"
+                rm -f "$ARMED_FILE"
+                exit 1
+            fi
             log "prepare failed: restoring host and aborting the VM start"
-            restore_gpu
-            rm -f "$ARMED_FILE"
+            if restore_gpu; then
+                rm -f "$ARMED_FILE" "$STATE_FILE"
+            else
+                log "restore_gpu failed after prepare failure, keeping ARMED_FILE and preserving state"
+            fi
             exit 1
         fi
         ;;
     release/end)
         log "=== release/end for $GUEST ==="
-        restore_gpu
-        rm -f "$ARMED_FILE"
-        if [ -x "$LAUNCHER" ]; then
-            systemd-run --no-block --collect --unit=wise-single-gpu-revert "$LAUNCHER" --revert-wait >> "$LOG_FILE" 2>&1 || true
+        if restore_gpu; then
+            rm -f "$ARMED_FILE" "$STATE_FILE"
+            if [ -x "$LAUNCHER" ]; then
+                systemd-run --no-block --collect "$LAUNCHER" --revert-wait >> "$LOG_FILE" 2>&1 || true
+            fi
+        else
+            log "restore_gpu failed, keeping ARMED_FILE and preserving state"
         fi
         ;;
 esac
@@ -330,7 +437,7 @@ HOOKEOF
 do_uninstall() {
     if [[ $EUID -ne 0 ]]; then
         echo "[!] Root privileges required to remove the single-GPU hook."
-        return 0
+        return 1
     fi
     if [[ -f "$HOOK_FILE" ]] && grep -q "$MARKER" "$HOOK_FILE"; then
         rm -f "$HOOK_FILE"
