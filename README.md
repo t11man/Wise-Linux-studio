@@ -190,14 +190,7 @@ File| Purpose
 "vm_builder.sh"| Builds the Windows 11 VM (unattended)
 "create_debloat_iso.sh"| Builds the Windows answer ISO
 "single_gpu_hooks.sh"| Unfinished single-GPU experiment, not used by the GUI
-
-🧠 How this project was built
-
-Wise Linux Studio is a self tool that I conceived and developed then used gemini pro to build the basics and which I have reviewed  the code multiple times using Claude to ensure its stability., tested the tool on a real Fedora machine, and found the problems that shaped it, such as a desktop freeze when the host suspended while the VM was running, and a scan step that wrote to disk when it should have been read-only.
-
-The code was written with AI assistance (Gemini) under the author's direction. It was then reviewed repeatedly with Claude (Anthropic), which pointed out bugs and risky behavior that were fixed afterwards.
-
-Reviews like these reduce mistakes, but they are not a guarantee of stability or safety. The code has been tested manually only on a Fedora laptop and has not been audited by a human expert. That is why real hardware testing and expert review are what the project needs most.
+ afterwards.
 
 🤝 Contributing
 
